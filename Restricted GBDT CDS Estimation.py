@@ -1,158 +1,115 @@
 # -*- coding: utf-8 -*-
 """
-Gradient Boosting Desicion Tree Model for CDS Spread Estimation
-@depencies: CatBoost, Optuna (Bayesian HPO) and SKLearn (ML INFRA)
+(Restriced) Gradient Boosting Desicion Tree Model for CDS Spread Estimation.
+    Uses TimeSeries Cross(5)-Fold Validation to learn only from past data,
+    with ordinal mappings for AvRating, DocClause and Tier enforced by
+    monotone const
+    
+@depencies: Pandas, 
+            Numpy, 
+            CatBoost, and 
+            SKLearn (Model Selection: TimeSeries CV. 
+                     Metrics: MSE and R2.)
 @author: D Franssen
 """
 
 import pandas as pd
 import numpy as np
-# import optuna
 from catboost import CatBoostRegressor, Pool
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.metrics import mean_squared_error, r2_score
 
-file = r"C:\Users\denni\OneDrive\Documents\Dennin\Erasmus Univeristy Rotterdam\Block 3\Master Class\Case\Data\markit_in_sample_202302_202303.xlsx"
-output_file = r"C:\Users\denni\OneDrive\Documents\Dennin\Erasmus Univeristy Rotterdam\Block 3\Master Class\Case\Data\CatBoost_Spread5y.xlsx"
+path = r"C:\Users\denni\OneDrive\Documents\Dennin\Erasmus Univeristy Rotterdam\Block 3\Master Class\Case\Data"
+file = "Nomura_extended_data.xlsx"
+file_path = f"{path}\\{file}"
 
-# Load dataset and define categorical features
-df_ordinal = pd.read_excel(file)
-df_ordinal_copy = df_ordinal.copy()
+sheet_dict = pd.read_excel(file_path, sheet_name=None)
 
-## Data Prep ##
-
-ordinal_mapping_AvRating = {
-    'D': 8,
-    'CCC': 7,
-    'B': 6,
-    'BB': 5,
-    'BBB': 4,
-    'A': 3,
-    'AA': 2,
-    'AAA': 1
+# Define ordinal mappings
+ordinal_mappings = {
+    "AvRating": {'D': 8, 'CCC': 7, 'B': 6, 'BB': 5, 'BBB': 4, 'A': 3, 'AA': 2, 'AAA': 1},
+    "DocClause": {'XR': 8, 'XR14': 7, 'MR': 6, 'MR14': 5, 'MM': 4, 'MM14': 3, 'CR': 2, 'CR14': 1},
+    "Tier": {'SECDOM': 4, 'SNRFOR': 3, 'SNRLAC': 2, 'SUBLT2': 1}
 }
 
-ordinal_mapping_DocClause = {
-    'XR': 8,
-    'XR14': 7,
-    'MR': 6,
-    'MR14': 5,
-    'MM': 4,
-    'MM14': 3,
-    'CR': 2,
-    'CR14': 1
-}
+# Define features and monotone constraints
+categorical_features = ["Sector", "Region", "Country", "Ccy"]
+ordinal_features = ["AvRating_ordinal", "DocClause_ordinal", "Tier_ordinal"]
+monotone_constraints = [0, 0, 0, 0, 0, 0, 1, -1, -1]
 
-ordinal_mapping_Tier = {
-    'SECDOM': 4,
-    'SNRFOR': 3,
-    'SNRLAC': 2,
-    'SUBLT2': 1
-}
+# Define Time Series K(=5)Fold Split
+n_splits = 5
+tscv = TimeSeriesSplit(n_splits=n_splits)
 
-# Apply the mapping to the 'avgrating' column
-df_ordinal['AvRating_ordinal'] = df_ordinal['AvRating'].map(ordinal_mapping_AvRating)
-df_ordinal['DocClause_ordinal'] = df_ordinal['DocClause'].map(ordinal_mapping_DocClause)
-df_ordinal['Tier_ordinal'] = df_ordinal['Tier'].map(ordinal_mapping_Tier)
+# Save cv results
+cv_results = []
 
-categorical_features = ["Sector", "Region", "AvRating_ordinal", "Tier_ordinal", "Country", "DocClause_ordinal", "Ccy"]
-category_features = ["Sector", "Region", "Country", "Ccy"]
-ordinal_features =["AvRating_ordinal", "Tier_ordinal", "DocClause_ordinal"]
+print(X.columns())
 
-# Replace NaN values in categorical features with the string 'nan' and ensure all are strings
-for col in category_features:
-    df_ordinal[col] = df_ordinal[col].fillna('nan').astype(str)
+for spread, df in sheet_dict.items():
+    print(f"Processing {spread}...")
+    
+    # Apply ordinal encoding
+    for col, mapping in ordinal_mappings.items():
+        df[f"{col}_ordinal"] = df[col].map(mapping)
+    
+    # Drop original categorical and unnecessary columns
+    X = df.drop(columns=["AvRating", "DocClause", "Tier",
+                         "Unnamed: 0", "Date", "Ticker", 
+                         "ShortName"], errors="ignore")
+    
+    # Drop spread columns
+    X = X.drop(columns=[spread], errors="ignore")
+    
+    # Define target y & apply log transformation
+    y = np.log(df[spread])
+    
+    # Define CatBoost parameters (uses best parameters from Optuna tuning)
+    params = optimized_results[spread]["Best Parameters"]
+    params.update({
+        "loss_function": "RMSE",
+        "monotone_constraints": monotone_constraints,
+        "cat_features": categorical_features,
+    })
+    
+    mse_scores = []
+    r2_scores = []
+    
+    # Perform TimeSeries Cross-Validation
+    for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
+        print(f"Fold {fold + 1}/{n_splits} for {spread}...")
+        
+        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+        
+        # Define CatBoost Pool
+        train_pool = Pool(X_train, 
+                          label=y_train, 
+                          cat_features=categorical_features)
+        test_pool = Pool(X_test, 
+                         label=y_test, 
+                         cat_features=categorical_features)
+        
+        # Initialize and Train CatBoost Model
+        model = CatBoostRegressor(**params, verbose=500)
+        model.fit(train_pool, eval_set=test_pool, early_stopping_rounds=50)
+        
+        # Predictions
+        y_pred = model.predict(X_test)
+        
+        # Store Per-Fold Metrics
+        cv_results.append({
+            "Spread": spread,
+            "Fold": fold + 1,
+            "MSE": mean_squared_error(y_test, y_pred),
+            "R²": r2_score(y_test, y_pred),
+            "Best Iteration": model.get_best_iteration(),
+            "Feature Importance": model.get_feature_importance().tolist()
+        })
 
-df_ordinal = df_ordinal.dropna(subset=['AvRating_ordinal','DocClause_ordinal', 'Tier_ordinal'])
+print("Cross-validation completed for all spreads!")
 
-tickers = df_ordinal.copy()
-
-# Define features (keeping all columns except the target)
-df_ordinal = df_ordinal.drop(columns=["Column1", "Ticker", "ShortName", "AvRating", "DocClause", "Tier"])
-leakage = df_ordinal[["Date", "ImpliedRating", "Recovery", "CompositeDepth5y", "CurveLiquidityScore"]]
-spreads = df_ordinal[["Date", "Spread6m", "Spread1y", "Spread2y", "Spread3y", "Spread4y", "Spread5y", "Spread7y", "Spread10y", "Spread15y", "Spread20y", "Spread30y"]]
-
-X = df_ordinal.drop(columns=["ImpliedRating", "Recovery", "CompositeDepth5y", "CurveLiquidityScore", "Spread6m", "Spread1y", "Spread2y", "Spread3y", "Spread4y", "Spread5y", "Spread7y", "Spread10y", "Spread15y", "Spread20y", "Spread30y"])
-
-# Apply log transformation (log1p to avoid issues with zero values)
-y = np.log(spreads["Spread6m"])
-
-# Train-Test Split (80/20)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Remove rows where target (Spread5y) is NaN
-X_train = X_train[~y_train.isna()]
-y_train = y_train.dropna()
-
-X_test = X_test[~y_test.isna()]
-y_test = y_test.dropna()
-
-X_test_with_date = X_test.copy()  # Copy X_test before removing Date
-X_test_with_date["Date"] = df_ordinal.loc[X.index, "Date"]  # Restore Date column
-
-X_train = X_train.drop(columns=["Date"])
-X_test = X_test.drop(columns=["Date"])
-
-## CatBoost ##
-
-# Define CatBoost Pool (optimized for categorical features)
-train_pool = Pool(X_train, 
-                  label=y_train, 
-                  cat_features=category_features)
-
-test_pool = Pool(X_test, 
-                 label=y_test, 
-                 cat_features=category_features)
-
-# Initialize and Train CatBoost Model
-model = CatBoostRegressor(
-    depth=9,
-    learning_rate=0.18564647534503254,
-    iterations=500, #2234
-    l2_leaf_reg=7.231674504247666,
-    subsample=0.7914624753637889,
-    loss_function='RMSE', # Root Mean Square Error (no MSE)
-    boosting_type='Ordered',
-    min_data_in_leaf=100,
-    monotone_constraints=[0, 0, 0, 0, 1, -1, -1],
-    cat_features=category_features,
-    verbose=250  # Show progress every 250 iterations
-)
-
-model.fit(train_pool, eval_set=test_pool, early_stopping_rounds=50, verbose=True)
-
-# Predictions
-y_pred = model.predict(X_test)
-
-## RESULTS ##
-
-# R-Squared
-r2 = r2_score(y_test, y_pred)
-print(f"R^2 Score: {r2:.6f}")
-
-# Define categorical features (excluding AvRating)
-categorical_features_fixed = ["Sector", "Region", "Tier", "Country", "DocClause", "Ccy"]
-
-# Select the most frequent value (mode) for each categorical feature
-fixed_values = {col: X_test_with_date[col].mode()[0] for col in categorical_features_fixed}
-
-# Results dataframe with MSE
-results_df = pd.DataFrame({
-    "Date": X_test_with_date["Date"],
-    "Ticker": tickers.loc[X_test_with_date.index, "Ticker"],
-    "Sector": tickers.loc[X_test_with_date.index, "Sector"],
-    "Region": tickers.loc[X_test_with_date.index, "Region"],
-    "AvRating": tickers.loc[X_test_with_date.index, "AvRating"],
-    "Tier": tickers.loc[X_test_with_date.index, "Tier"],
-    "Country": tickers.loc[X_test_with_date.index, "Country"],
-    "DocClause": tickers.loc[X_test_with_date.index, "DocClause"],
-    "Ccy": tickers.loc[X_test_with_date.index, "Ccy"],
-
-    "Actual Spread5y": y_test,
-    "Predicted Spread5y": y_pred,
-    "MSE": (y_test - y_pred) ** 2
-}) 
-
-# Save to Excel
-results_df.to_excel(output_file, index=False)
-print(f"File saved successfully: {output_file}")
+# Convert results to DataFrame and save
+cv_results_df = pd.DataFrame(cv_results)
+cv_results_df.to_excel("cross_validation_results.xlsx", index=False)
+print("Results saved to 'cross_validation_results.xlsx'")
