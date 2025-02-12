@@ -19,7 +19,7 @@ from catboost import CatBoostRegressor, Pool
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error, r2_score
 
-path = r"C:\Users\denni\OneDrive\Documents\Dennin\Erasmus Univeristy Rotterdam\Block 3\Master Class\Case\Data"
+path = r"C:\Users\"
 file = "Nomura_extended_data.xlsx"
 file_path = f"{path}\\{file}"
 
