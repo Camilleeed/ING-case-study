@@ -18,13 +18,20 @@ import numpy as np
 from catboost import CatBoostRegressor, Pool
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error, r2_score
-
-path = r"C:\Users\"
+import json
+    
+path = r"C:\Users\denni\OneDrive\Documents\Dennin\Erasmus Univeristy Rotterdam\Block 3\Master Class\Case\Data"
 file = "Nomura_extended_data.xlsx"
 file_path = f"{path}\\{file}"
 
 sheet_dict = pd.read_excel(file_path, sheet_name=None)
 
+json_file = "optimized_hyperparameters.json"
+json_file_path = f"{path}\\{json_file}"
+# Load dictionary
+with open(json_file_path, "r") as f:
+    optimized_hyperparameters = json.load(f)
+    
 # Define ordinal mappings
 ordinal_mappings = {
     "AvRating": {'D': 8, 'CCC': 7, 'B': 6, 'BB': 5, 'BBB': 4, 'A': 3, 'AA': 2, 'AAA': 1},
@@ -43,8 +50,6 @@ tscv = TimeSeriesSplit(n_splits=n_splits)
 
 # Save cv results
 cv_results = []
-
-print(X.columns())
 
 for spread, df in sheet_dict.items():
     print(f"Processing {spread}...")
@@ -65,7 +70,7 @@ for spread, df in sheet_dict.items():
     y = np.log(df[spread])
     
     # Define CatBoost parameters (uses best parameters from Optuna tuning)
-    params = optimized_results[spread]["Best Parameters"]
+    params = optimized_hyperparameters[spread]["Best Parameters"]
     params.update({
         "loss_function": "RMSE",
         "monotone_constraints": monotone_constraints,
