@@ -1,0 +1,101 @@
+{
+    "Spread6m": {
+        "Best Parameters": {
+            "depth": 9,
+            "learning_rate": 0.185646475,
+            "iterations": 2234,
+            "l2_leaf_reg": 7.231674504,
+            "subsample": 0.791462475
+        }
+    },
+    "Spread1y": {
+        "Best Parameters": {
+            "depth": 10,
+            "learning_rate": 0.107009606,
+            "iterations": 2270,
+            "l2_leaf_reg": 6.458916476,
+            "subsample": 0.65385777
+        }
+    },
+    "Spread2y": {
+        "Best Parameters": {
+            "depth": 10,
+            "learning_rate": 0.154370467,
+            "iterations": 2281,
+            "l2_leaf_reg": 7.376883657,
+            "subsample": 0.685341795
+        }
+    },
+    "Spread3y": {
+        "Best Parameters": {
+            "depth": 10,
+            "learning_rate": 0.101756983,
+            "iterations": 2101,
+            "l2_leaf_reg": 6.571686821,
+            "subsample": 0.719155147
+        }
+    },
+    "Spread4y": {
+        "Best Parameters": {
+            "depth": 10,
+            "learning_rate": 0.103865594,
+            "iterations": 2590,
+            "l2_leaf_reg": 6.057985591,
+            "subsample": 0.656022799
+        }
+    },
+    "Spread5y": {
+        "Best Parameters": {
+            "depth": 7,
+            "learning_rate": 0.145803288,
+            "iterations": 2420,
+            "l2_leaf_reg": 7.590591074,
+            "subsample": 0.693340154
+        }
+    },
+    "Spread7y": {
+        "Best Parameters": {
+            "depth": 10,
+            "learning_rate": 0.165633529,
+            "iterations": 2237,
+            "l2_leaf_reg": 5.592825797,
+            "subsample": 0.583407019
+        }
+    },
+    "Spread10y": {
+        "Best Parameters": {
+            "depth": 10,
+            "learning_rate": 0.151238512,
+            "iterations": 2318,
+            "l2_leaf_reg": 5.107503549,
+            "subsample": 0.761134568
+        }
+    },
+    "Spread15y": {
+        "Best Parameters": {
+            "depth": 9,
+            "learning_rate": 0.165004746,
+            "iterations": 2028,
+            "l2_leaf_reg": 6.01353157,
+            "subsample": 0.707857998
+        }
+    },
+    "Spread20y": {
+        "Best Parameters": {
+            "depth": 10,
+            "learning_rate": 0.068360553,
+            "iterations": 2572,
+            "l2_leaf_reg": 7.539349687,
+            "subsample": 0.563566212
+        }
+    },
+    "Spread30y": {
+        "Best Parameters": {
+            "depth": 10,
+            "learning_rate": 0.174906538,
+            "iterations": 2968,
+            "l2_leaf_reg": 7.000293383,
+            "subsample": 0.849554189
+        }
+    }
+}
